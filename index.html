@@ -19,6 +19,8 @@
 
 
 
+
+
 // --- Reference data -------------------------------------------------
 
 const WHEEL_BSD = {
@@ -40,16 +42,16 @@ const CHAINRING_PRESETS = {
 };
 
 const CASSETTE_PRESETS = {
-  "11-speed 12-25": [12, 13, 14, 15, 16, 17, 19, 21, 23, 25],
-  "11-speed 11-25": [11, 12, 13, 14, 15, 17, 19, 21, 23, 25],
-  "11-speed 11-28": [11, 12, 13, 14, 16, 18, 20, 22, 25, 28],
-  "11-speed 11-30": [11, 12, 13, 14, 16, 18, 20, 22, 25, 30],
-  "11-speed 11-32": [11, 12, 13, 14, 16, 18, 21, 24, 28, 32],
-  "11-speed 11-34": [11, 13, 15, 17, 19, 21, 23, 25, 28, 30, 34],
-  "12-speed 11-30": [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30],
-  "12-speed 11-34": [11, 12, 13, 14, 15, 17, 19, 21, 24, 28, 31, 34],
+  "11-speed 12-25": [12, 13, 14, 15, 16, 17, 18, 19, 21, 23, 25],
+  "11-speed 11-25": [11, 12, 13, 14, 15, 16, 17, 19, 21, 23, 25],
+  "11-speed 11-28": [11, 12, 13, 14, 15, 17, 19, 21, 23, 25, 28],
+  "11-speed 11-30": [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30],
+  "11-speed 11-32": [11, 12, 13, 14, 16, 18, 20, 22, 25, 28, 32],
+  "11-speed 11-34": [11, 13, 15, 17, 19, 21, 23, 25, 27, 30, 34],
+  "12-speed 11-30": [11, 12, 13, 14, 15, 16, 17, 19, 21, 24, 27, 30],
+  "12-speed 11-34": [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34],
   "12-speed 11-36": [11, 12, 13, 14, 15, 17, 19, 21, 24, 28, 32, 36],
-  "GRX 11-speed 11-34": [11, 13, 15, 17, 19, 21, 24, 27, 31, 34],
+  "GRX 11-speed 11-34": [11, 13, 15, 17, 19, 21, 23, 25, 27, 30, 34],
   "GRX 11-speed 11-42": [11, 13, 15, 17, 19, 21, 24, 28, 32, 37, 42],
   "Custom": null,
 };
@@ -134,12 +136,12 @@ function GearSpeedCalculator() {
   const [aChainringPreset, setAChainringPreset] = useState("53/39 (standard)");
   const [aCassettePreset, setACassettePreset] = useState("11-speed 12-25");
   const [aFrontStr, setAFrontStr] = useState("53,39");
-  const [aRearStr, setARearStr] = useState("12,13,14,15,16,17,19,21,23,25");
+  const [aRearStr, setARearStr] = useState("12,13,14,15,16,17,18,19,21,23,25");
 
   const [bChainringPreset, setBChainringPreset] = useState("50/34 (compact)");
   const [bCassettePreset, setBCassettePreset] = useState("11-speed 11-30");
   const [bFrontStr, setBFrontStr] = useState("50,34");
-  const [bRearStr, setBRearStr] = useState("11,12,13,14,16,18,20,22,25,30");
+  const [bRearStr, setBRearStr] = useState("11,12,13,14,15,17,19,21,24,27,30");
 
   const bsd = WHEEL_BSD[wheelKey];
   const circumferenceMm = Math.PI * (bsd + 2 * Number(tyreWidth || 0));
@@ -163,9 +165,9 @@ function GearSpeedCalculator() {
         key: `A-${f}`,
         label: `A \u00b7 ${f}t`,
         color,
-        points: aRears.map((r) => ({ x: r, y: speedAt(f, r, cadence) })),
-        bandLow: aRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 0.95) })),
-        bandHigh: aRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 1.05) })),
+        points: aRears.map((r) => ({ x: r, teeth: r, y: speedAt(f, r, cadence) })),
+        bandLow: aRears.map((r) => ({ x: r, teeth: r, y: speedAt(f, r, cadence * 0.95) })),
+        bandHigh: aRears.map((r) => ({ x: r, teeth: r, y: speedAt(f, r, cadence * 1.05) })),
       });
     });
     if (compare) {
@@ -175,9 +177,9 @@ function GearSpeedCalculator() {
           key: `B-${f}`,
           label: `B \u00b7 ${f}t`,
           color,
-          points: bRears.map((r) => ({ x: r, y: speedAt(f, r, cadence) })),
-          bandLow: bRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 0.95) })),
-          bandHigh: bRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 1.05) })),
+          points: bRears.map((r) => ({ x: r, teeth: r, y: speedAt(f, r, cadence) })),
+          bandLow: bRears.map((r) => ({ x: r, teeth: r, y: speedAt(f, r, cadence * 0.95) })),
+          bandHigh: bRears.map((r) => ({ x: r, teeth: r, y: speedAt(f, r, cadence * 1.05) })),
         });
       });
     }
@@ -188,14 +190,21 @@ function GearSpeedCalculator() {
   const padL = 56, padR = 20, padT = 20, padB = 44;
   const plotW = W - padL - padR, plotH = H - padT - padB;
 
+  // all real cog teeth values across active lines, used to mark the actual data points
   const allTeeth = useMemo(() => {
     const s = new Set();
-    lines.forEach((l) => l.points.forEach((p) => s.add(p.x)));
+    lines.forEach((l) => l.points.forEach((p) => s.add(p.teeth)));
     return Array.from(s).sort((a, b) => a - b);
   }, [lines]);
 
   const xMin = allTeeth.length ? allTeeth[0] : 0;
   const xMax = allTeeth.length ? allTeeth[allTeeth.length - 1] : 1;
+
+  // uniform 1-tooth-step gridline at every integer between the smallest and largest cog
+  const fineGrid = useMemo(
+    () => Array.from({ length: Math.max(xMax - xMin + 1, 1) }, (_, i) => xMin + i),
+    [xMin, xMax]
+  );
 
   const allY = useMemo(() => {
     const vals = [];
@@ -306,15 +315,18 @@ function GearSpeedCalculator() {
                   </text>
                 </g>
               ))}
+              {fineGrid.map((t) => (
+                <line key={t} x1={xScale(t)} x2={xScale(t)} y1={padT} y2={H - padB} stroke="#25272C" strokeWidth="1" />
+              ))}
               {allTeeth.map((t) => (
                 <g key={t}>
-                  <line x1={xScale(t)} x2={xScale(t)} y1={padT} y2={H - padB} stroke="#25272C" strokeWidth="1" />
-                  <text x={xScale(t)} y={H - padB + 18} textAnchor="middle" fontSize="11" fill="#8B909A" fontFamily={mono}>
+                  <line x1={xScale(t)} x2={xScale(t)} y1={padT} y2={H - padB} stroke="#3A3E45" strokeWidth="1" />
+                  <text x={xScale(t)} y={H - padB + 18} textAnchor="middle" fontSize="11" fill="#B8BCC4" fontFamily={mono}>
                     {t}
                   </text>
                 </g>
               ))}
-              <text x={(padL + W - padR) / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="#6B7078">
+              <text x={(padL + W - padR) / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#6B7078">
                 cassette cog (teeth)
               </text>
               <text x={14} y={(padT + H - padB) / 2} textAnchor="middle" fontSize="11" fill="#6B7078" transform={`rotate(-90 14 ${(padT + H - padB) / 2})`}>
@@ -333,7 +345,7 @@ function GearSpeedCalculator() {
                   <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth="2.25" />
                   {l.points.map((p, i) => (
                     <circle key={i} cx={xScale(p.x)} cy={yScale(p.y)} r="3.5" fill={l.color}>
-                      <title>{`${l.label} \u2192 ${p.x}t: ${round1(p.y)} ${unit} at ${cadence} rpm`}</title>
+                      <title>{`${l.label} \u2192 ${p.teeth}t: ${round1(p.y)} ${unit} at ${cadence} rpm`}</title>
                     </circle>
                   ))}
                 </g>
