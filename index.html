@@ -218,8 +218,8 @@ function GearSpeedCalculator() {
     return vals;
   }, [lines, showBand]);
 
-  const yMin = allY.length ? Math.min(...allY) * 0.95 : 0;
-  const yMax = allY.length ? Math.max(...allY) * 1.05 : 1;
+  const yMin = 0;
+  const yMax = allY.length ? Math.ceil((Math.max(...allY) + 0.1) / 5) * 5 : 5;
 
   const xScale = (v) => padL + ((v - xMin) / (xMax - xMin || 1)) * plotW;
   const yScale = (v) => padT + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH;
@@ -227,8 +227,7 @@ function GearSpeedCalculator() {
   const pathFor = (pts) =>
     pts.length ? "M " + pts.map((p) => `${round1(xScale(p.x))},${round1(yScale(p.y))}`).join(" L ") : "";
 
-  const yTicks = 5;
-  const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / yTicks);
+  const yTickVals = Array.from({ length: yMax / 5 + 1 }, (_, i) => i * 5);
 
   return (
     <div style={styles.app}>
@@ -340,14 +339,22 @@ function GearSpeedCalculator() {
                 </g>
               ))}
 
-              {lines.map((l) => (
+              {lines.map((l, li) => (
                 <g key={l.key}>
                   <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth="2.25" />
-                  {l.points.map((p, i) => (
-                    <circle key={i} cx={xScale(p.x)} cy={yScale(p.y)} r="3.5" fill={l.color}>
-                      <title>{`${l.label} \u2192 ${p.teeth}t: ${round1(p.y)} ${unit} at ${cadence} rpm`}</title>
-                    </circle>
-                  ))}
+                  {l.points.map((p, i) => {
+                    const dy = li % 2 === 0 ? -8 : 14;
+                    return (
+                      <g key={i}>
+                        <circle cx={xScale(p.x)} cy={yScale(p.y)} r="3.5" fill={l.color}>
+                          <title>{`${l.label} \u2192 ${p.teeth}t: ${round1(p.y)} ${unit} at ${cadence} rpm`}</title>
+                        </circle>
+                        <text x={xScale(p.x)} y={yScale(p.y) + dy} textAnchor="middle" fontSize="8.5" fill={l.color} fontFamily={mono}>
+                          {round1(p.y).toFixed(1)}
+                        </text>
+                      </g>
+                    );
+                  })}
                 </g>
               ))}
             </svg>
