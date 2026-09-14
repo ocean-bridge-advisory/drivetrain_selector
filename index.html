@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gear Speed Calculator</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      html, body { margin: 0; background: #1C1E22; }
+      #root { min-height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-presets="react">
+      const { useState, useMemo } = React;
+
+
+
+// --- Reference data -------------------------------------------------
+
+const WHEEL_BSD = {
+  "700c / 29\"": 622,
+  "650b / 27.5\"": 584,
+  "26\"": 559,
+  "20\" (folding)": 406,
+};
+
+const CHAINRING_PRESETS = {
+  "53/39 (standard)": [53, 39],
+  "52/36 (semi-compact)": [52, 36],
+  "50/34 (compact)": [50, 34],
+  "55/42 (Dura-Ace R9200)": [55, 42],
+  "54/40 (Dura-Ace R9200)": [54, 40],
+  "46/30 (GRX, 2x gravel)": [46, 30],
+  "40 (1x gravel)": [40],
+  "Custom": null,
+};
+
+const CASSETTE_PRESETS = {
+  "11-speed 12-25": [12, 13, 14, 15, 16, 17, 19, 21, 23, 25],
+  "11-speed 11-25": [11, 12, 13, 14, 15, 17, 19, 21, 23, 25],
+  "11-speed 11-28": [11, 12, 13, 14, 16, 18, 20, 22, 25, 28],
+  "11-speed 11-30": [11, 12, 13, 14, 16, 18, 20, 22, 25, 30],
+  "11-speed 11-32": [11, 12, 13, 14, 16, 18, 21, 24, 28, 32],
+  "11-speed 11-34": [11, 13, 15, 17, 19, 21, 23, 25, 28, 30, 34],
+  "12-speed 11-30": [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30],
+  "12-speed 11-34": [11, 12, 13, 14, 15, 17, 19, 21, 24, 28, 31, 34],
+  "12-speed 11-36": [11, 12, 13, 14, 15, 17, 19, 21, 24, 28, 32, 36],
+  "GRX 11-speed 11-34": [11, 13, 15, 17, 19, 21, 24, 27, 31, 34],
+  "GRX 11-speed 11-42": [11, 13, 15, 17, 19, 21, 24, 28, 32, 37, 42],
+  "Custom": null,
+};
+
+const COLORS_A = ["#E8A33D", "#B87A1E"];
+const COLORS_B = ["#5AA9E6", "#3A7FAF"];
+
+const round1 = (n) => Math.round(n * 10) / 10;
+
+function parseTeeth(s) {
+  return s
+    .split(",")
+    .map((t) => parseInt(t.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+function DrivetrainPicker({ label, chainringPreset, setChainringPreset, cassettePreset, setCassettePreset, frontStr, setFrontStr, rearStr, setRearStr }) {
+  const applyChainring = (key) => {
+    setChainringPreset(key);
+    const p = CHAINRING_PRESETS[key];
+    if (p) setFrontStr(p.join(","));
+  };
+  const applyCassette = (key) => {
+    setCassettePreset(key);
+    const p = CASSETTE_PRESETS[key];
+    if (p) setRearStr(p.join(","));
+  };
+
+  return (
+    <div style={styles.section}>
+      <div style={styles.sectionTitle}>{label}</div>
+      <Field label="Chainring preset">
+        <select style={styles.select} value={chainringPreset} onChange={(e) => applyChainring(e.target.value)}>
+          {Object.keys(CHAINRING_PRESETS).map((k) => (
+            <option key={k} value={k}>{k}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Chainring teeth (comma-sep)">
+        <input type="text" style={styles.input} value={frontStr} onChange={(e) => { setChainringPreset("Custom"); setFrontStr(e.target.value); }} />
+      </Field>
+      <Field label="Cassette preset">
+        <select style={styles.select} value={cassettePreset} onChange={(e) => applyCassette(e.target.value)}>
+          {Object.keys(CASSETTE_PRESETS).map((k) => (
+            <option key={k} value={k}>{k}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Cassette teeth (comma-sep)">
+        <input type="text" style={styles.input} value={rearStr} onChange={(e) => { setCassettePreset("Custom"); setRearStr(e.target.value); }} />
+      </Field>
+    </div>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div style={styles.section}>
+      <div style={styles.sectionTitle}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label style={styles.field}>
+      <div style={styles.fieldLabel}>{label}</div>
+      {children}
+    </label>
+  );
+}
+
+function GearSpeedCalculator() {
+  const [wheelKey, setWheelKey] = useState("700c / 29\"");
+  const [tyreWidth, setTyreWidth] = useState(25);
+  const [cadence, setCadence] = useState(90);
+  const [showBand, setShowBand] = useState(true);
+  const [unit, setUnit] = useState("km/h");
+  const [compare, setCompare] = useState(false);
+
+  const [aChainringPreset, setAChainringPreset] = useState("53/39 (standard)");
+  const [aCassettePreset, setACassettePreset] = useState("11-speed 12-25");
+  const [aFrontStr, setAFrontStr] = useState("53,39");
+  const [aRearStr, setARearStr] = useState("12,13,14,15,16,17,19,21,23,25");
+
+  const [bChainringPreset, setBChainringPreset] = useState("50/34 (compact)");
+  const [bCassettePreset, setBCassettePreset] = useState("11-speed 11-30");
+  const [bFrontStr, setBFrontStr] = useState("50,34");
+  const [bRearStr, setBRearStr] = useState("11,12,13,14,16,18,20,22,25,30");
+
+  const bsd = WHEEL_BSD[wheelKey];
+  const circumferenceMm = Math.PI * (bsd + 2 * Number(tyreWidth || 0));
+
+  const speedAt = (front, rear, cad) => {
+    const mPerMin = cad * (front / rear) * (circumferenceMm / 1000);
+    const kmh = (mPerMin * 60) / 1000;
+    return unit === "km/h" ? kmh : kmh * 0.621371;
+  };
+
+  const aFronts = useMemo(() => parseTeeth(aFrontStr), [aFrontStr]);
+  const aRears = useMemo(() => parseTeeth(aRearStr).sort((x, y) => x - y), [aRearStr]);
+  const bFronts = useMemo(() => parseTeeth(bFrontStr), [bFrontStr]);
+  const bRears = useMemo(() => parseTeeth(bRearStr).sort((x, y) => x - y), [bRearStr]);
+
+  const lines = useMemo(() => {
+    const out = [];
+    aFronts.forEach((f, i) => {
+      const color = COLORS_A[i % COLORS_A.length];
+      out.push({
+        key: `A-${f}`,
+        label: `A \u00b7 ${f}t`,
+        color,
+        points: aRears.map((r) => ({ x: r, y: speedAt(f, r, cadence) })),
+        bandLow: aRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 0.95) })),
+        bandHigh: aRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 1.05) })),
+      });
+    });
+    if (compare) {
+      bFronts.forEach((f, i) => {
+        const color = COLORS_B[i % COLORS_B.length];
+        out.push({
+          key: `B-${f}`,
+          label: `B \u00b7 ${f}t`,
+          color,
+          points: bRears.map((r) => ({ x: r, y: speedAt(f, r, cadence) })),
+          bandLow: bRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 0.95) })),
+          bandHigh: bRears.map((r) => ({ x: r, y: speedAt(f, r, cadence * 1.05) })),
+        });
+      });
+    }
+    return out;
+  }, [aFronts, aRears, bFronts, bRears, compare, cadence, circumferenceMm, unit]);
+
+  const W = 760, H = 400;
+  const padL = 56, padR = 20, padT = 20, padB = 44;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const allTeeth = useMemo(() => {
+    const s = new Set();
+    lines.forEach((l) => l.points.forEach((p) => s.add(p.x)));
+    return Array.from(s).sort((a, b) => a - b);
+  }, [lines]);
+
+  const xMin = allTeeth.length ? allTeeth[0] : 0;
+  const xMax = allTeeth.length ? allTeeth[allTeeth.length - 1] : 1;
+
+  const allY = useMemo(() => {
+    const vals = [];
+    lines.forEach((l) => {
+      l.points.forEach((p) => vals.push(p.y));
+      if (showBand) {
+        l.bandLow.forEach((p) => vals.push(p.y));
+        l.bandHigh.forEach((p) => vals.push(p.y));
+      }
+    });
+    return vals;
+  }, [lines, showBand]);
+
+  const yMin = allY.length ? Math.min(...allY) * 0.95 : 0;
+  const yMax = allY.length ? Math.max(...allY) * 1.05 : 1;
+
+  const xScale = (v) => padL + ((v - xMin) / (xMax - xMin || 1)) * plotW;
+  const yScale = (v) => padT + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH;
+
+  const pathFor = (pts) =>
+    pts.length ? "M " + pts.map((p) => `${round1(xScale(p.x))},${round1(yScale(p.y))}`).join(" L ") : "";
+
+  const yTicks = 5;
+  const yTickVals = Array.from({ length: yTicks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / yTicks);
+
+  return (
+    <div style={styles.app}>
+      <style>{`
+        * { box-sizing: border-box; }
+        input[type="range"] { -webkit-appearance: none; height: 2px; background: #3A3E45; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #E8A33D; cursor: pointer; border: 2px solid #1C1E22; }
+        input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #E8A33D; cursor: pointer; border: 2px solid #1C1E22; }
+        input[type="checkbox"] { accent-color: #E8A33D; width: 15px; height: 15px; cursor: pointer; }
+        select, input[type="text"], input[type="number"] { font-family: inherit; }
+        ::selection { background: #E8A33D55; }
+      `}</style>
+
+      <header style={styles.header}>
+        <div>
+          <div style={styles.eyebrow}>DRIVETRAIN SPEED MODEL</div>
+          <h1 style={styles.h1}>Road speed by gearing</h1>
+        </div>
+        <div style={styles.unitToggle}>
+          <button style={unit === "km/h" ? styles.unitBtnActive : styles.unitBtn} onClick={() => setUnit("km/h")}>km/h</button>
+          <button style={unit === "mph" ? styles.unitBtnActive : styles.unitBtn} onClick={() => setUnit("mph")}>mph</button>
+        </div>
+      </header>
+
+      <div style={styles.layout}>
+        <div style={styles.panel}>
+          <Section title="Wheel & tyre">
+            <Field label="Wheel size">
+              <select style={styles.select} value={wheelKey} onChange={(e) => setWheelKey(e.target.value)}>
+                {Object.keys(WHEEL_BSD).map((k) => (<option key={k} value={k}>{k}</option>))}
+              </select>
+            </Field>
+            <Field label="Tyre width (mm)">
+              <input type="number" style={styles.input} value={tyreWidth} onChange={(e) => setTyreWidth(e.target.value)} min={18} max={60} />
+            </Field>
+            <div style={styles.derived}>rolling circumference: <b>{Math.round(circumferenceMm)} mm</b></div>
+          </Section>
+
+          <Section title="Cadence">
+            <div style={styles.cadenceRow}>
+              <input type="range" min={50} max={120} value={cadence} onChange={(e) => setCadence(Number(e.target.value))} style={{ flex: 1 }} />
+              <div style={styles.cadenceVal}>{cadence} rpm</div>
+            </div>
+            <label style={styles.checkRow}>
+              <input type="checkbox" checked={showBand} onChange={(e) => setShowBand(e.target.checked)} />
+              <span>Show ±5% cadence band ({round1(cadence * 0.95)}–{round1(cadence * 1.05)} rpm)</span>
+            </label>
+          </Section>
+
+          <DrivetrainPicker
+            label="Drivetrain A"
+            chainringPreset={aChainringPreset} setChainringPreset={setAChainringPreset}
+            cassettePreset={aCassettePreset} setCassettePreset={setACassettePreset}
+            frontStr={aFrontStr} setFrontStr={setAFrontStr}
+            rearStr={aRearStr} setRearStr={setARearStr}
+          />
+
+          <Section title="Compare">
+            <label style={styles.checkRow}>
+              <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} />
+              <span>Overlay a second drivetrain</span>
+            </label>
+          </Section>
+
+          {compare && (
+            <DrivetrainPicker
+              label="Drivetrain B"
+              chainringPreset={bChainringPreset} setChainringPreset={setBChainringPreset}
+              cassettePreset={bCassettePreset} setCassettePreset={setBCassettePreset}
+              frontStr={bFrontStr} setFrontStr={setBFrontStr}
+              rearStr={bRearStr} setRearStr={setBRearStr}
+            />
+          )}
+        </div>
+
+        <div style={styles.panelWide}>
+          <div style={styles.chartWrap}>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+              {yTickVals.map((v, i) => (
+                <g key={i}>
+                  <line x1={padL} x2={W - padR} y1={yScale(v)} y2={yScale(v)} stroke="#2E3138" strokeWidth="1" />
+                  <text x={padL - 8} y={yScale(v) + 4} textAnchor="end" fontSize="11" fill="#8B909A" fontFamily={mono}>
+                    {round1(v)}
+                  </text>
+                </g>
+              ))}
+              {allTeeth.map((t) => (
+                <g key={t}>
+                  <line x1={xScale(t)} x2={xScale(t)} y1={padT} y2={H - padB} stroke="#25272C" strokeWidth="1" />
+                  <text x={xScale(t)} y={H - padB + 18} textAnchor="middle" fontSize="11" fill="#8B909A" fontFamily={mono}>
+                    {t}
+                  </text>
+                </g>
+              ))}
+              <text x={(padL + W - padR) / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="#6B7078">
+                cassette cog (teeth)
+              </text>
+              <text x={14} y={(padT + H - padB) / 2} textAnchor="middle" fontSize="11" fill="#6B7078" transform={`rotate(-90 14 ${(padT + H - padB) / 2})`}>
+                speed ({unit})
+              </text>
+
+              {showBand && lines.map((l) => (
+                <g key={l.key + "-band"}>
+                  <path d={pathFor(l.bandLow)} fill="none" stroke={l.color} strokeWidth="1.25" strokeDasharray="4 3" opacity="0.55" />
+                  <path d={pathFor(l.bandHigh)} fill="none" stroke={l.color} strokeWidth="1.25" strokeDasharray="4 3" opacity="0.55" />
+                </g>
+              ))}
+
+              {lines.map((l) => (
+                <g key={l.key}>
+                  <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth="2.25" />
+                  {l.points.map((p, i) => (
+                    <circle key={i} cx={xScale(p.x)} cy={yScale(p.y)} r="3.5" fill={l.color}>
+                      <title>{`${l.label} \u2192 ${p.x}t: ${round1(p.y)} ${unit} at ${cadence} rpm`}</title>
+                    </circle>
+                  ))}
+                </g>
+              ))}
+            </svg>
+          </div>
+
+          <div style={styles.legend}>
+            {lines.map((l) => (
+              <div key={l.key} style={styles.legendItem}>
+                <span style={{ ...styles.legendSwatch, background: l.color }} />
+                {l.label}
+              </div>
+            ))}
+            {showBand && (
+              <div style={styles.legendItem}>
+                <span style={styles.legendDash} />
+                ±5% cadence
+              </div>
+            )}
+          </div>
+
+          <div style={styles.footerNote}>
+            solid line: speed at {cadence} rpm. dashed: same gear at {round1(cadence * 0.95)} and {round1(cadence * 1.05)} rpm. hover a point for its exact value.
+          </div>
+        </div>
+      </div>
+
+      <footer style={styles.footer}>
+        Circumference approximated as &pi; &times; (bead seat diameter + 2 &times; tyre width). Accurate to within ~1% of ISO/ETRTO rollout tables for typical road and gravel tyre profiles. Wheel flex, tyre pressure and drivetrain losses not modelled.
+      </footer>
+    </div>
+  );
+}
+
+const mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+const sans = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+const styles = {
+  app: { background: "#1C1E22", color: "#E8E6E1", fontFamily: sans, minHeight: "100%", padding: "20px 18px 32px", borderRadius: 8 },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 },
+  eyebrow: { fontSize: 11, letterSpacing: 1, color: "#8B909A", marginBottom: 4 },
+  h1: { fontSize: 22, fontWeight: 600, margin: 0, color: "#E8E6E1" },
+  unitToggle: { display: "flex", border: "1px solid #35383E", borderRadius: 6, overflow: "hidden" },
+  unitBtn: { padding: "6px 14px", background: "transparent", color: "#8B909A", border: "none", cursor: "pointer", fontSize: 13, fontFamily: mono },
+  unitBtnActive: { padding: "6px 14px", background: "#E8A33D", color: "#1C1E22", border: "none", cursor: "pointer", fontSize: 13, fontFamily: mono, fontWeight: 700 },
+  layout: { display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" },
+  panel: { flex: "1 1 240px", minWidth: 220, display: "flex", flexDirection: "column", gap: 18 },
+  panelWide: { flex: "2 1 460px", minWidth: 320 },
+  section: { background: "#24272C", border: "1px solid #2E3138", borderRadius: 8, padding: 14 },
+  sectionTitle: { fontSize: 12, color: "#8B909A", letterSpacing: 0.4, marginBottom: 10 },
+  field: { display: "block", marginBottom: 10 },
+  fieldLabel: { fontSize: 12, color: "#B8BCC4", marginBottom: 4 },
+  select: { width: "100%", background: "#1C1E22", color: "#E8E6E1", border: "1px solid #35383E", borderRadius: 5, padding: "7px 8px", fontSize: 13 },
+  input: { width: "100%", background: "#1C1E22", color: "#E8E6E1", border: "1px solid #35383E", borderRadius: 5, padding: "7px 8px", fontSize: 13, fontFamily: mono },
+  derived: { fontSize: 12, color: "#8B909A", marginTop: 4 },
+  cadenceRow: { display: "flex", alignItems: "center", gap: 12, marginBottom: 10 },
+  cadenceVal: { fontFamily: mono, fontSize: 14, minWidth: 62, textAlign: "right", color: "#E8A33D" },
+  checkRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#B8BCC4", cursor: "pointer" },
+  chartWrap: { border: "1px solid #2E3138", borderRadius: 8, background: "#24272C", padding: "10px 6px" },
+  legend: { display: "flex", flexWrap: "wrap", gap: 16, marginTop: 10, fontSize: 12, color: "#B8BCC4" },
+  legendItem: { display: "flex", alignItems: "center", gap: 6 },
+  legendSwatch: { width: 12, height: 3, borderRadius: 2, display: "inline-block" },
+  legendDash: { width: 12, height: 0, borderTop: "2px dashed #8B909A", display: "inline-block" },
+  footerNote: { fontSize: 11, color: "#6B7078", marginTop: 6 },
+  footer: { marginTop: 22, fontSize: 11, color: "#6B7078", lineHeight: 1.5, maxWidth: 640 },
+};
+
+      ReactDOM.createRoot(document.getElementById("root")).render(
+        <GearSpeedCalculator />
+      );
+    </script>
+  </body>
+</html>
